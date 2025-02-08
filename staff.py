@@ -2,7 +2,7 @@
 from langchain_openai import ChatOpenAI
 import os
 from crewai_tools import PDFSearchTool
-from crewai_tools  import tool
+from crewai.tools  import tool
 from crewai.process import Process
 from crewai import Crew
 from crewai import Task
