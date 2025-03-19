@@ -152,7 +152,7 @@ def intialize_crew(rag_tool):
         agent=info_combiner,
         context=[pdf_search_task, web_search_task] ,
         expected_output=(
-            "Provide 10 comprehensive and extensive points. Each point should be a distinct subtopic or key aspect, followed by a detailed explanation. "
+            "Provide exactly 10 comprehensive and extensive points. Each point should be a distinct subtopic or key aspect, followed by a detailed explanation. "
             "Do not include any sources, metadata, or JSON formatting. Just return the points in plain text."
         ),
     )
@@ -190,21 +190,35 @@ def convert_to_json(result: str) :
 
 
       prompt = f"""
-        You are given the following context:
+                You are given the following context:
 
-        {result}
+                {result}
 
-        Your task is to generate 10 questions  covering all topic in the context. 
+                Your task is to generate exactly 10 questions that cover all topics mentioned in the context. Each question must be generated based on one of the following approaches:
 
-        - The output should be in JSON format.
-        - Each question should either:
-        - Ask for an explanation with an example.
-        - Explain a concept briefly.
-        - Explain all parts of a concept.
-        - For some questions, if real-life examples make sense, provide a practical question using real-life scenarios.
+                1. Ask for an explanation with an example.
+                2. Explain a concept briefly.
+                3. Explain all parts of a concept.
+                4. If applicable, provide a practical question using real-life scenarios.
 
-        Return the output in the specified JSON format.
+                For every question, assign a `context_title` representing the topic from which the question is derived. 
 
+                Return the output strictly in the following JSON format (do not include any additional keys or text):
+
+                {{
+                "format": [
+                    {{
+                    "context_title": "topic from which the question is asked",
+                    "question": "the question generated based on the context"
+                    }},
+                                     {{
+                    "context_title": "topic from which the question is asked",
+                    "question": "the question generated based on the context"
+                    }} , 
+                    .....
+                    
+                ]
+                }}
    
         """
 

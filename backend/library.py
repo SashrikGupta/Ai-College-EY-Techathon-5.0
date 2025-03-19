@@ -13,89 +13,23 @@ from transformers import AutoTokenizer, AutoModel
 import torch
 from tqdm import tqdm
 from langchain_groq import ChatGroq
-import cohere
 from dotenv import dotenv_values
 import glob
 import shutil
+from fastembed.embedding import FlagEmbedding as Embedding
 
+fe_model = Embedding(model_name="BAAI/bge-base-en-v1.5")
 # Load configuration from .env file
 config = dotenv_values(".env") 
 
-# Initialize the Cohere client
-co = cohere.Client(config['COHERE_API_KEY_LIB'])
 
 def embeder(text):
-    """
-    Get an embedding for the provided text using Cohere.
-    """
-    response = co.embed(
-        model='embed-english-v2.0',
-        texts=[text]
-    )
-    return response.embeddings[0]
 
-def parallel_embedding(chunks):
-    """
-    Calculate embeddings in parallel for a list of text chunks.
-    """
-    embeddings = []
-    with ThreadPoolExecutor() as executor:
-        futures = {executor.submit(embeder, chunk): chunk for chunk in chunks}
-        for future in tqdm(as_completed(futures), total=len(futures), desc="Calculating embeddings"):
-            embeddings.append(future.result())
-    return embeddings
+    embedding = fe_model.embed([text])
+    import numpy as np 
+    np_embed = np.array(list(embedding)[0])
+    return np_embed
 
-def pdf_vector_space(path_to_pdf):
-    """
-    Process a PDF file to build a FAISS index and return the associated text chunks.
-    """
-    local_chunks = []
-    loader = PyPDFLoader(path_to_pdf)
-    pages = loader.load()
-    content = [page.page_content for page in pages]
-    splitter = RecursiveCharacterTextSplitter(
-        separators=["\n\n", "\n", ".", "!", "?", " "],
-        chunk_size=1000,
-        chunk_overlap=1
-    )
-    for page_content in content:
-        local_chunks.extend(splitter.split_text(page_content))
-    embeddings = parallel_embedding(local_chunks)
-    embeddings = [emb for emb in embeddings if emb is not None]
-    vectors = np.array(embeddings)
-    dim = vectors.shape[1]
-    index = faiss.IndexFlatL2(dim)
-    index.add(vectors)
-    return index, local_chunks
-
-def video_vector_space(path_to_video):
-    """
-    Process a video file (by extracting and transcribing audio) to build a FAISS index.
-    """
-    local_chunks = []
-    audio_path = "temp_audio.wav"
-    video = VideoFileClip(path_to_video)
-    video.audio.write_audiofile(audio_path)
-    try:
-        transcriber = aai.Transcriber()
-        transcription = transcriber.transcribe(audio_path)
-        text = transcription.text
-        splitter = RecursiveCharacterTextSplitter(
-            separators=["\n\n", "\n", ".", "!", "?", " "],
-            chunk_size=2000,
-            chunk_overlap=1
-        )
-        local_chunks.extend(splitter.split_text(text))
-        embeddings = parallel_embedding(local_chunks)
-        embeddings = [emb for emb in embeddings if emb is not None]
-        vectors = np.array(embeddings)
-        dim = vectors.shape[1]
-        index = faiss.IndexFlatL2(dim)
-        index.add(vectors)
-    finally:
-        if os.path.exists(audio_path):
-            os.remove(audio_path)
-    return index, local_chunks
 
 def data_give(index, search_query, chunks):
     """
@@ -117,35 +51,6 @@ def data_give(index, search_query, chunks):
     llm = ChatGroq(groq_api_key=groq_api_key, model_name="llama3-70b-8192")
     return llm.invoke(prompt)
 
-def process_pdf_directory(directory_path):
-    """
-    Process all PDFs in the directory to create a FAISS index and corresponding text chunks.
-    """
-    pdf_files = glob.glob(os.path.join(directory_path, "*.pdf"))
-    if not pdf_files:
-        raise ValueError("No PDF files found in the specified directory.")
-    local_chunks = []
-    for pdf_file in pdf_files:
-        print(f"Processing {pdf_file}")
-        loader = PyPDFLoader(pdf_file)
-        pages = loader.load()
-        content = [page.page_content for page in pages]
-        splitter = RecursiveCharacterTextSplitter(
-            separators=["\n\n", "\n", ".", "!", "?", " "],
-            chunk_size=2000,
-            chunk_overlap=1
-        )
-        for page_content in content:
-            local_chunks.extend(splitter.split_text(page_content))
-    embeddings = parallel_embedding(local_chunks)
-    embeddings = [emb for emb in embeddings if emb is not None]
-    if not embeddings:
-        raise ValueError("No valid embeddings generated from PDF files.")
-    vectors = np.array(embeddings)
-    dim = vectors.shape[1]
-    index = faiss.IndexFlatL2(dim)
-    index.add(vectors)
-    return index, local_chunks
 
 def process_files_in_directory(directory_path):
     """
@@ -187,8 +92,7 @@ def process_files_in_directory(directory_path):
                     os.remove(audio_path)
         else:
             print(f"Unsupported file type: {file_path}")
-    embeddings = parallel_embedding(local_chunks)
-    embeddings = [emb for emb in embeddings if emb is not None]
+    embeddings = list(fe_model.embed(local_chunks))
     if not embeddings:
         raise ValueError("No valid embeddings generated from files.")
     vectors = np.array(embeddings)

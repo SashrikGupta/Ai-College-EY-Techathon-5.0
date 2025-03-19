@@ -6,7 +6,9 @@ import {
   GraduationCap, 
   Users, 
   FileText,
-  ArrowRight 
+  ArrowRight, 
+  Code , 
+  ExternalLink
 } from 'lucide-react';
 
 const features = [
@@ -34,6 +36,14 @@ const features = [
     icon: FileText,
     title: 'ResearchGen',
     description: 'Transform research papers into engaging multimedia content.'
+  },
+  {
+    icon: Code,
+    title: 'Code Connect',
+    description: 'A collaborative platform to practice and learn coding.',
+    // Indicate this is an advertisement
+    ad: true,
+    link: 'https://mern-stack-devlopment-fs3e.vercel.app/'
   }
 ];
 
@@ -107,8 +117,24 @@ const LandingPage = () => {
                     <div className="absolute flex items-center justify-center h-12 w-12 rounded-md bg-primary-500 text-white">
                       <Icon className="h-6 w-6" aria-hidden="true" />
                     </div>
-                    <p className="ml-16 text-lg leading-6 font-medium text-gray-900">{feature.title}</p>
-                    <p className="mt-2 ml-16 text-base text-gray-500">{feature.description}</p>
+                    <p className="ml-16 text-lg leading-6 font-medium flex text-gray-900">
+                      {feature.title}
+                      {feature.ad && (
+                        <a
+                          href={feature.link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="ml-2 text-xs text-primary-500 underline flex"
+                        >
+                          (Ad: Visit now)<ExternalLink
+                          size='15px'
+                          />
+                        </a>
+                      )}
+                    </p>
+                    <p className="mt-2 ml-16 text-base text-gray-500">
+                      {feature.description}
+                    </p>
                   </div>
                 );
               })}

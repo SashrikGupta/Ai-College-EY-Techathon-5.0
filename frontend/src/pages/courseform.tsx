@@ -12,7 +12,7 @@ import {
   MenuItem,
 } from "@mui/material";
 import coursedata from "../courses.json";
-
+import ChatbotPage from "./ChatbotPage"
 export interface FormData {
   department: string;
   branch: string;
@@ -65,7 +65,7 @@ const CourseForm: React.FC<CourseFormProps> = ({ onSubmit }) => {
         Please enter your details below.
       </Typography>
       <Divider style={{ marginBottom: "2rem" }} />
-
+{/* 
       <form
         onSubmit={handleSubmit}
         className="bg-white border border-gray-300 rounded-lg shadow-sm p-8 mx-auto"
@@ -158,7 +158,8 @@ const CourseForm: React.FC<CourseFormProps> = ({ onSubmit }) => {
         >
           Submit
         </Button>
-      </form>
+      </form> */}
+      <ChatbotPage/>
     </Container>
   );
 };

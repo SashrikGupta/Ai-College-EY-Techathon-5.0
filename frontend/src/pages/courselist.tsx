@@ -108,17 +108,13 @@ const CourseList = () => {
                 label={course.name}
                 onSelect={handleNodeSelect}
                 data={{ type: 'course' }}
-              >
-                {/* Unique Info node for each course */}
-                <TreeItem
-                  itemId={`${course._id}-info`}
-                  label="Info"
-                  onClick={()=>{
-                     setselectednodeindex(idx)
-                     setinfoview(true)
+                onClick={()=>{
+                  setselectednodeindex(idx)
+                  setinfoview(true)
 
-                  }}
-                />
+               }}
+              >
+
                 {course.course.content.map((subCourse, subIndex) => {
                   return (
                     <TreeItem
@@ -159,7 +155,7 @@ const CourseList = () => {
         { infoview ? <CourseInfo newCoursesData={courses[selectednodeindex]} />
         :
         <div>
-        <TopicInfo topic = {courses[selectednodeindex].course.content[selectedsubnodeindex].timeline[selectedtopicindex]} />
+        <TopicInfo topic = {courses[selectednodeindex].course.content[selectedsubnodeindex].timeline[selectedtopicindex]} subcourseidx = {selectedsubnodeindex} topicidx = {selectedtopicindex} courseid = {courses[selectednodeindex]._id}/>
        </div>
         
         }

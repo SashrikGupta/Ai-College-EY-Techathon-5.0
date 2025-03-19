@@ -311,12 +311,12 @@ class IIIcell:
 
         struct_answer = structured_llm.invoke(f"""
 
-        goven the following output 
+        given the following output 
 
         {last_event["messages"][-1].content}
 
 
-        format it ina structured format in json form  
+        format it in a structured format in json form  
         """)
 
         return struct_answer.dict()

@@ -1,7 +1,11 @@
-import React, { useState, useContext } from 'react';
+import React, { useState, useContext, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BrainCircuit, Mail, Lock } from 'lucide-react';
 import { CurrConfigContext } from '../context.tsx'; 
+import { GoogleLogin } from 'react-google-login';
+import { gapi } from 'gapi-script';
+
+const clientId = "453003846274-29iligbio0hb3o42lgc9ip1k7hrkppnf.apps.googleusercontent.com";
 
 interface LoginPageProps {
   onLogin: (user: any) => void;
@@ -15,6 +19,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [googleLoading, setGoogleLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -23,9 +28,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
     try {
       const response = await fetch('http://localhost:5000/login', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
       });
 
@@ -35,15 +38,76 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
         throw new Error(data.error || 'Login failed');
       }
 
-      localStorage.setItem("user", JSON.stringify(data)); // ✅ Store user in localStorage
-      setUser?.(data); // ✅ Update user in context
+      localStorage.setItem("user", JSON.stringify(data));
+      setUser?.(data);
       onLogin(data);
+      context?.setIsLoggedIn(true);
       navigate('/profile');
     } catch (err: any) {
       setError(err.message);
     }
   };
 
+  useEffect(() => {
+    function start() {
+      gapi.client.init({
+        clientId: clientId,
+        scope: "",
+      });
+    }
+    gapi.load('client:auth2', start);
+  }, []);
+
+  const onSuccess = async (res: any) => {
+    console.log("Google response:", res.profileObj);
+    try {
+      // Call your backend API with the Google profile details
+      const response = await fetch("http://localhost:5000/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username: res.profileObj.name,
+          email: res.profileObj.email,
+          image_url: res.profileObj.imageUrl
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to log in with Google");
+      }
+
+      const data = await response.json();
+      await context?.setIsLoggedIn(true);
+      localStorage.setItem("user", JSON.stringify(data));
+
+      setUser?.(data);
+      
+      setGoogleLoading(false);
+      navigate("/profile");
+    } catch (error) {
+      console.error("Google login error:", error);
+      setGoogleLoading(false);
+    }
+  };
+
+  const onFailure = (err: any) => {
+    console.error("Google Sign In Error:", err);
+    setGoogleLoading(false);
+  };
+
+
+  if(googleLoading){
+    return (
+      <>
+      <div className = "h-[90vh] flex justify-center">
+      <div className='loader m-auto'>
+       
+      </div>
+      </div>
+
+      </>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
@@ -149,49 +213,28 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
               </div>
             </div>
 
-            <div className="mt-6 grid grid-cols-3 gap-3">
+            <div className="mt-6 grid grid-cols-1 gap-3">
               <div>
-                <a
-                  href="#"
-                  className="w-full inline-flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-500 hover:bg-gray-50"
-                >
-                  <span className="sr-only">Sign in with Google</span>
-                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z" />
-                  </svg>
-                </a>
-              </div>
-
-              <div>
-                <a
-                  href="#"
-                  className="w-full inline-flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-500 hover:bg-gray-50"
-                >
-                  <span className="sr-only">Sign in with GitHub</span>
-                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                    <path
-                      fillRule="evenodd"
-                      d="M10 0C4.477 0 0 4.484 0 10.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0110 4.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.203 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.942.359.31.678.921.678 1.856 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0020 10.017C20 4.484 15.522 0 10 0z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                </a>
-              </div>
-
-              <div>
-                <a
-                  href="#"
-                  className="w-full inline-flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-500 hover:bg-gray-50"
-                >
-                  <span className="sr-only">Sign in with LinkedIn</span>
-                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                    <path
-                      fillRule="evenodd"
-                      d="M16.338 16.338H13.67V12.16c0-.995-.017-2.277-1.387-2.277-1.39 0-1.601 1.086-1.601 2.207v4.248H8.014v-8.59h2.559v1.174h.037c.356-.675 1.227-1.387 2.526-1.387 2.703 0 3.203 1.778 3.203 4.092v4.711zM5.005 6.575a1.548 1.548 0 11-.003-3.096 1.548 1.548 0 01.003 3.096zm-1.337 9.763H6.34v-8.59H3.667v8.59zM17.668 1H2.328C1.595 1 1 1.581 1 2.298v15.403C1 18.418 1.595 19 2.328 19h15.34c.734 0 1.332-.582 1.332-1.299V2.298C19 1.581 18.402 1 17.668 1z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                </a>
+                <GoogleLogin
+                  clientId={clientId}
+                  onSuccess={onSuccess}
+                  onFailure={onFailure}
+                  cookiePolicy={'single_host_origin'}
+                  // Remove isSignedIn to prevent auto sign-in if you want the user to click the button
+                  render={renderProps => (
+                    <button
+                      onClick={() => {
+                        setGoogleLoading(true);
+                        renderProps.onClick();
+                      }}
+                      disabled={renderProps.disabled || googleLoading}
+                      className="w-full inline-flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-500 hover:bg-gray-50"
+                    >
+                      <span className="sr-only">Sign in with Google</span>
+                      {googleLoading ? "Loading..." : "Sign in with Google"}
+                    </button>
+                  )}
+                />
               </div>
             </div>
           </div>

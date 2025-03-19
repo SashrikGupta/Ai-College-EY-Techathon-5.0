@@ -8,9 +8,12 @@ import {
   Snackbar,
   Alert,
   MenuItem,
+  Grid,
+  Slide,
 } from "@mui/material";
 import { CurrConfigContext } from "../context.tsx";
 import Stanford from "../courses.json";
+import ChatbotPage from "./ChatbotPage";
 
 interface FormData {
   userid: string;
@@ -19,42 +22,40 @@ interface FormData {
   interest: string;
   duration: string;
   n_course: number;
+  index_course: string; // stored as a string from the input
+  remarks: string; // added for advisor remarks
 }
 
 const CreateCourseForm: React.FC = () => {
-  // Get the user from context
   const { user } = useContext(CurrConfigContext) || {};
 
-  // Initialize form data using the userid from context (if available)
   const [formData, setFormData] = useState<FormData>({
     userid: user?._id || "",
-    department: "School of Engineering", // default department
+    department: "School of Engineering",
     branch: "",
     interest: "",
     duration: "",
     n_course: 1,
+    index_course: "",
+    remarks: "", // initial state for remarks
   });
-
   const [loading, setLoading] = useState(false);
   const [toastOpen, setToastOpen] = useState(false);
   const [error, setError] = useState("");
-  // State to keep track of the selected department for branch options
   const [selectedDep, setSelectedDep] = useState("School of Engineering");
+  const [showChatbot, setShowChatbot] = useState(false);
 
-  // Update formData if the user context changes
   useEffect(() => {
     if (user?._id) {
       setFormData((prev) => ({ ...prev, userid: user._id }));
     }
   }, [user]);
 
-  // Build department options from the keys in the imported JSON
   const departmentOptions = Object.keys(Stanford).map((department) => ({
     value: department,
     label: department,
   }));
 
-  // Branch options depend on the selected department
   const branchOptions =
     selectedDep && Stanford[selectedDep] && Stanford[selectedDep].departments
       ? Object.keys(Stanford[selectedDep].departments).map((branch) => ({
@@ -63,12 +64,9 @@ const CreateCourseForm: React.FC = () => {
         }))
       : [];
 
-  // Handle input field changes
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     if (name === "department") {
-      // Update both the selected department and form data,
-      // and reset branch when department changes
       setSelectedDep(value);
       setFormData((prev) => ({
         ...prev,
@@ -83,22 +81,24 @@ const CreateCourseForm: React.FC = () => {
     }
   };
 
-  // Handle form submission
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
     setError("");
+
+    // Create payload with index_course as a list
+    const payload = formData;
+
     try {
       const response = await fetch("http://127.0.0.1:5000/generate_course", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(payload),
       });
       const data = await response.json();
       if (!response.ok) {
         throw new Error(data.error || "Error generating course");
       }
-      // If successful, open the toast notification
       setToastOpen(true);
     } catch (err: any) {
       setError(err.message);
@@ -107,17 +107,16 @@ const CreateCourseForm: React.FC = () => {
     }
   };
 
-  return (
-    <Container maxWidth="sm" style={{ marginTop: "2rem" }}>
+  const CourseFormCard = (
+    <div className="bg-white rounded-lg shadow-lg p-6">
       <Typography
-        variant="h4"
+        variant="h5"
         gutterBottom
         style={{ color: "#382D76", textAlign: "center" }}
       >
         Create New Course
       </Typography>
       <form onSubmit={handleSubmit}>
-        {/* Department Dropdown */}
         <TextField
           select
           label="Department"
@@ -134,8 +133,6 @@ const CreateCourseForm: React.FC = () => {
             </MenuItem>
           ))}
         </TextField>
-
-        {/* Branch Dropdown */}
         <TextField
           select
           label="Branch"
@@ -145,7 +142,7 @@ const CreateCourseForm: React.FC = () => {
           fullWidth
           margin="normal"
           required
-          disabled={!formData.department} // optionally disable if no department selected
+          disabled={!formData.department}
         >
           {branchOptions.map((option) => (
             <MenuItem key={option.value} value={option.value}>
@@ -153,7 +150,6 @@ const CreateCourseForm: React.FC = () => {
             </MenuItem>
           ))}
         </TextField>
-
         <TextField
           label="Interest"
           name="interest"
@@ -173,15 +169,40 @@ const CreateCourseForm: React.FC = () => {
           required
         />
         <TextField
-          label="Number of Courses"
+          label="Enter the number of courses"
           name="n_course"
-          type="number"
           value={formData.n_course}
           onChange={handleChange}
           fullWidth
+          type="number"
           margin="normal"
           required
         />
+        {/* New TextField for advisor remarks */}
+        <TextField
+          label="Remarks given by advisor"
+          name="remarks"
+          value={formData.remarks}
+          onChange={handleChange}
+          fullWidth
+          margin="normal"
+        />
+        {/* Chatbot can be initialized with department, branch, and interest only */}
+        {!showChatbot && (
+          <Button
+            variant="outlined"
+            fullWidth
+            style={{
+              padding: "1rem",
+              marginTop: "1rem",
+              marginBottom: "5rem",
+            }}
+            onClick={() => setShowChatbot(true)}
+            disabled={!formData.department || !formData.branch || !formData.interest}
+          >
+            Initialize Chat Bot
+          </Button>
+        )}
         <Button
           type="submit"
           variant="contained"
@@ -196,15 +217,49 @@ const CreateCourseForm: React.FC = () => {
           Submit
         </Button>
       </form>
-      {/* Show loader while waiting for the response */}
       {loading && <div className="loader" style={{ marginTop: "1rem" }} />}
-      {/* Display error if any */}
       {error && (
         <Typography variant="body2" color="error" style={{ marginTop: "1rem" }}>
           {error}
         </Typography>
       )}
-      {/* Snackbar toast */}
+    </div>
+  );
+
+  return (
+    <Container maxWidth="xl" style={{ marginTop: "2rem" }}>
+      <Typography
+        variant="h4"
+        gutterBottom
+        style={{ color: "#382D76", textAlign: "center" }}
+      >
+        Course Creation Assistant
+      </Typography>
+      <Grid container spacing={4} justifyContent="center">
+        <Grid item xs={12} md={6}>
+          <div
+            style={{
+              transition: "transform 0.5s",
+              transform: showChatbot ? "translateX(-100px)" : "translateX(0)",
+            }}
+          >
+            {CourseFormCard}
+          </div>
+        </Grid>
+        {showChatbot && (
+          <Grid item xs={12} md={6}>
+            <Slide direction="left" in={showChatbot} mountOnEnter unmountOnExit>
+              <div>
+                <ChatbotPage
+                  department={formData.department}
+                  branch={formData.branch}
+                  interest={formData.interest}
+                />
+              </div>
+            </Slide>
+          </Grid>
+        )}
+      </Grid>
       <Snackbar
         open={toastOpen}
         autoHideDuration={6000}

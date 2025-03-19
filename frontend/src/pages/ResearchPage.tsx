@@ -13,27 +13,21 @@ import {
 } from "lucide-react";
 
 const ResearchPage = () => {
+  const ngrok_link = "https://8204-34-148-56-74.ngrok-free.app";
   // File upload & progress states
   const [files, setFiles] = React.useState<File[]>([]);
   const [uploadProgress, setUploadProgress] = React.useState(0);
 
   // Which output format is selected ("presentation", "podcast", "video", "comic")
-  const [selectedOutput, setSelectedOutput] = React.useState<string | null>(
-    null
-  );
-  // Global processing state (used during transformation API calls)
+  const [selectedOutput, setSelectedOutput] = React.useState<string>("none");
+  // Global processing state
   const [processing, setProcessing] = React.useState(false);
-  
-
-  // ------------------------------
-  // Extra state for each transformation
 
   // Presentation-specific states
   const [researchTitle, setResearchTitle] = React.useState("");
-  const [presentationStyle, setPresentationStyle] = React.useState<
-    "professional" | "fun"
-  >("professional");
-  const [pptUrl, setPptUrl] = React.useState<string | null>(null);
+  const [presentationStyle, setPresentationStyle] = React.useState<"professional" | "fun">("professional");
+  // Storing the generated PDF as a blob URL
+  const [pdfUrl, setPdfUrl] = React.useState<string | null>(null);
 
   // Podcast-specific states
   const lengthOptions = ["Short (1-2 min)", "Medium (3-5 min)"];
@@ -51,22 +45,18 @@ const ResearchPage = () => {
     "Japanese",
     "Chinese",
   ];
-  const [podcastLength, setPodcastLength] = React.useState<string>(
-    lengthOptions[0]
-  );
+  const [podcastLength, setPodcastLength] = React.useState<string>(lengthOptions[0]);
   const [podcastTone, setPodcastTone] = React.useState<string>(toneOptions[0]);
-  const [podcastLanguage, setPodcastLanguage] = React.useState<string>(
-    languageOptions[0]
-  );
+  const [podcastLanguage, setPodcastLanguage] = React.useState<string>(languageOptions[0]);
+  // Podcast audio URL (Object URL from the returned .wav Blob)
   const [audioUrl, setAudioUrl] = React.useState<string | null>(null);
 
-  // Shorts-specific states
+  // Video-specific state
   const [videoUrl, setVideoUrl] = React.useState<string | null>(null);
 
   // Comic-specific states
   const [comicUrl, setComicUrl] = React.useState<string | null>(null);
 
-  // ------------------------------
   // Define available output types
   const outputTypes = [
     { id: "presentation", name: "Presentation", icon: Presentation },
@@ -75,8 +65,7 @@ const ResearchPage = () => {
     { id: "comic", name: "Comic", icon: Image },
   ];
 
-  // ------------------------------
-  // Simulate file upload progress (0 to 100 over ~2 seconds)
+  // Simulate file upload progress
   const simulateUpload = () => {
     setUploadProgress(0);
     const interval = setInterval(() => {
@@ -90,10 +79,9 @@ const ResearchPage = () => {
     }, 200);
   };
 
-  // ------------------------------
   // File drop handling using react-dropzone
   const onDrop = React.useCallback((acceptedFiles: File[]) => {
-    setFiles(acceptedFiles); // Assume one file is used per transformation
+    setFiles(acceptedFiles);
     simulateUpload();
   }, []);
 
@@ -102,12 +90,10 @@ const ResearchPage = () => {
     accept: { "application/pdf": [".pdf"] },
   });
 
-  // ------------------------------
-  // Toggle output format selection (only one allowed)
+  // Toggle output format selection (clearing previous results)
   const toggleOutput = (id: string) => {
-    setSelectedOutput((prev) => (prev === id ? null : id));
-    // Clear previous results when switching types
-    setPptUrl(null);
+    setSelectedOutput((prev) => (prev === id ? "none" : id));
+    setPdfUrl(null);
     setAudioUrl(null);
     setVideoUrl(null);
     setComicUrl(null);
@@ -118,41 +104,38 @@ const ResearchPage = () => {
     setFiles((prev) => prev.filter((file) => file.name !== name));
   };
 
-  // ------------------------------
-  // POST request functions for each output type
-
-  // For Presentation
-  const handleGeneratePPT = async () => {
+  // For Presentation: handle PDF output generation
+  const handleGeneratePDF = async () => {
     if (!files[0] || !researchTitle) {
       alert("Please upload a PDF and enter a research title.");
       return;
     }
     setProcessing(true);
     const formData = new FormData();
-    formData.append("pdf_file", files[0]);
-    formData.append("research_title", researchTitle);
-    const professionalValue = presentationStyle === "professional" ? "1" : "0";
-    formData.append("professional", professionalValue);
+    formData.append("file", files[0]);
+    formData.append("presentation_title", researchTitle);
+    const toneValue = presentationStyle === "professional" ? "formal" : "funny";
+    formData.append("tone", toneValue);
+    formData.append("ppt_type", "1"); // Default ppt type
 
     try {
       const response = await axios.post(
-        "http://127.0.0.1:8080/generate_ppt",
-        formData
+        `${ngrok_link}/generate_pdf`,
+        formData,
+        { responseType: "blob" }
       );
-      if (response.data.ppt_url) {
-        setPptUrl(response.data.ppt_url);
-      } else {
-        alert("Failed to generate PowerPoint.");
-      }
+      const pdfBlob = new Blob([response.data], { type: "application/pdf" });
+      const pdfBlobUrl = URL.createObjectURL(pdfBlob);
+      setPdfUrl(pdfBlobUrl);
     } catch (error) {
-      console.error("Error generating PPT:", error);
-      alert("Failed to generate the presentation.");
+      console.error("Error generating PDF:", error);
+      alert("Failed to generate the PDF.");
     } finally {
       setProcessing(false);
     }
   };
 
-  // For Podcast
+  // For Podcast: handle podcast generation from PDF (backend now returns a .wav file)
   const handlePodcastProcess = async () => {
     if (!files[0]) return;
     setProcessing(true);
@@ -164,14 +147,17 @@ const ResearchPage = () => {
     formData.append("use_advanced_audio", "true");
 
     try {
-      const response = await fetch("http://localhost:5000/generate_podcast", {
+      const response = await fetch( `${ngrok_link}/generate_podcast`, {
         method: "POST",
         body: formData,
       });
-      const result = await response.json();
-      if (result.status === "completed") {
-        setAudioUrl(result.audio_url);
+      if (response.ok) {
+        // Get the .wav file as a Blob and create an Object URL for it
+        const audioBlob = await response.blob();
+        const audioUrl = URL.createObjectURL(audioBlob);
+        setAudioUrl(audioUrl);
       } else {
+        console.error("Error processing podcast:", response.statusText);
         alert("Failed to process podcast.");
       }
     } catch (error) {
@@ -180,15 +166,15 @@ const ResearchPage = () => {
     setProcessing(false);
   };
 
-  // For Shorts (Video)
+  // For Video (Shorts)
   const handleShortsProcess = async () => {
     if (!files[0]) return;
     setProcessing(true);
     const formData = new FormData();
-    formData.append("pdf", files[0]);
+    formData.append("file", files[0]);
 
     try {
-      const response = await fetch("http://127.0.0.1:5000/process_pdf", {
+      const response = await fetch(`${ngrok_link}/generate_video`, {
         method: "POST",
         body: formData,
       });
@@ -213,7 +199,7 @@ const ResearchPage = () => {
     formData.append("file", files[0]);
 
     try {
-      const response = await fetch("http://127.0.0.1:5000/predict", {
+      const response = await fetch("http://127.0.0.1:7088/predict", {
         method: "POST",
         body: formData,
       });
@@ -230,11 +216,10 @@ const ResearchPage = () => {
     }
   };
 
-  // Unified handler that calls the appropriate function based on the selected output
+  // Unified handler that calls the appropriate function based on selected output
   const handleTransform = async () => {
-    if (!selectedOutput) return;
     if (selectedOutput === "presentation") {
-      await handleGeneratePPT();
+      await handleGeneratePDF();
     } else if (selectedOutput === "podcast") {
       await handlePodcastProcess();
     } else if (selectedOutput === "video") {
@@ -244,8 +229,291 @@ const ResearchPage = () => {
     }
   };
 
-  // ------------------------------
-  // Render
+  // Determine if an output has been generated.
+  const isOutputReady =
+    (selectedOutput === "presentation" && pdfUrl) ||
+    (selectedOutput === "podcast" && audioUrl) ||
+    (selectedOutput === "video" && videoUrl) ||
+    (selectedOutput === "comic" && comicUrl);
+
+  // If a PDF is ready, show the two-panel PDF layout.
+  if (selectedOutput === "presentation" && pdfUrl) {
+    return (
+      <div className="w-[100vw] mx-auto px-4 py-8 flex justify-center">
+        <div style={{ display: "flex", gap: "1rem", height: "80vh", width: "95vw" }}>
+          {/* Left Panel: PDF Display */}
+          <div style={{ flex: 2, height: "100%" }}>
+            <iframe
+              src={pdfUrl}
+              title="Generated PDF"
+              style={{
+                height: "100%",
+                border: "none",
+                borderRadius: "8px",
+                width: "70vw",
+              }}
+            />
+          </div>
+          {/* Right Panel: Notepad & Action Buttons */}
+          <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+            <div
+              style={{
+                marginBottom: "0.5rem",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                padding: "0.5rem",
+                border: "2px solid #382D76",
+                borderRadius: "8px",
+                fontWeight: "bold",
+                color: "#382D76",
+              }}
+            >
+              <span>Notepad 📝</span>
+              <button
+                onClick={() => {
+                  /* Implement copy functionality */
+                }}
+                style={{
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                }}
+              >
+                Copy 🗒️
+              </button>
+            </div>
+            <textarea
+              placeholder="Take your notes here..."
+              style={{
+                flex: 1,
+                borderRadius: "8px",
+                padding: "0.5rem",
+                border: "1px solid #ccc",
+              }}
+            />
+            <div style={{ display: "flex", gap: "0.5rem", marginTop: "1rem" }}>
+              <button
+                onClick={() => window.print()}
+                style={{
+                  flex: 1,
+                  backgroundColor: "#382D76",
+                  color: "white",
+                  padding: "0.5rem",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                }}
+              >
+                Print
+              </button>
+              <a
+                href={pdfUrl}
+                download="output.pdf"
+                style={{
+                  flex: 1,
+                  backgroundColor: "#382D76",
+                  color: "white",
+                  padding: "0.5rem",
+                  textAlign: "center",
+                  borderRadius: "4px",
+                  textDecoration: "none",
+                }}
+              >
+                Download PDF
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // If a video is ready, show a similar two-panel layout with the video on the left.
+  if (selectedOutput === "video" && videoUrl) {
+    return (
+      <div className="w-[100vw] mx-auto px-4 py-8 flex justify-center">
+        <div style={{ display: "flex", gap: "1rem", height: "80vh", width: "95vw" }}>
+          {/* Left Panel: Video Display */}
+          <div style={{ flex: 2, height: "100%" }}>
+            <video
+              src={videoUrl}
+              controls
+              style={{
+                height: "100%",
+                border: "none",
+                borderRadius: "8px",
+                width: "70vw",
+              }}
+            />
+          </div>
+          {/* Right Panel: Notepad & Action Buttons */}
+          <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+            <div
+              style={{
+                marginBottom: "0.5rem",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                padding: "0.5rem",
+                border: "2px solid #382D76",
+                borderRadius: "8px",
+                fontWeight: "bold",
+                color: "#382D76",
+              }}
+            >
+              <span>Notepad 📝</span>
+              <button
+                onClick={() => {
+                  /* Implement copy functionality */
+                }}
+                style={{
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                }}
+              >
+                Copy 🗒️
+              </button>
+            </div>
+            <textarea
+              placeholder="Take your notes here..."
+              style={{
+                flex: 1,
+                borderRadius: "8px",
+                padding: "0.5rem",
+                border: "1px solid #ccc",
+              }}
+            />
+            <div style={{ display: "flex", gap: "0.5rem", marginTop: "1rem" }}>
+              <button
+                onClick={() => window.print()}
+                style={{
+                  flex: 1,
+                  backgroundColor: "#382D76",
+                  color: "white",
+                  padding: "0.5rem",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                }}
+              >
+                Print
+              </button>
+              <a
+                href={videoUrl}
+                download="final_output.mp4"
+                style={{
+                  flex: 1,
+                  backgroundColor: "#382D76",
+                  color: "white",
+                  padding: "0.5rem",
+                  textAlign: "center",
+                  borderRadius: "4px",
+                  textDecoration: "none",
+                }}
+              >
+                Download Video
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // If a podcast is ready, show a two-panel layout with podcast audio and a blank notepad for notes.
+  if (selectedOutput === "podcast" && audioUrl) {
+    return (
+      <div className="w-[100vw] mx-auto px-4 py-8 flex justify-center">
+        <div style={{ display: "flex", gap: "1rem", height: "80vh", width: "95vw" }}>
+          {/* Left Panel: Podcast Audio Display */}
+          <div style={{ flex: 2, height: "100%" }}>
+            <img
+              className="w-full h-[63vh] mb-4 bg-black rounded-lg shadow-lg"
+              src="https://res.cloudinary.com/dogfmhpfc/image/upload/v1740393379/DALL_E_2025-02-24_16.05.23_-_A_modern_podcast_studio_with_a_white_and_purple_theme._A_male_researcher_with_neatly_styled_white_hair_and_square_glasses_sits_at_a_table_engaged_in_c_jczglq.webp"
+            ></img>
+            <audio controls src={audioUrl} className="w-full" />
+            <a
+              href={audioUrl}
+              download="podcast.wav"
+              style={{
+                display: "block",
+                marginTop: "1rem",
+                backgroundColor: "#382D76",
+                color: "white",
+                padding: "0.5rem",
+                textAlign: "center",
+                borderRadius: "4px",
+                textDecoration: "none",
+              }}
+            >
+              Download Podcast
+            </a>
+          </div>
+          {/* Right Panel: Notepad for Personal Notes */}
+          <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+            <div
+              style={{
+                marginBottom: "0.5rem",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                padding: "0.5rem",
+                border: "2px solid #382D76",
+                borderRadius: "8px",
+                fontWeight: "bold",
+                color: "#382D76",
+              }}
+            >
+              <span>Notepad 📝</span>
+              <button
+                onClick={() => {
+                  /* Implement copy functionality if needed */
+                }}
+                style={{
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                }}
+              >
+                Copy Notes 🗒️
+              </button>
+            </div>
+            <textarea
+              placeholder="Write your personal notes here..."
+              style={{
+                flex: 1,
+                borderRadius: "8px",
+                padding: "0.5rem",
+                border: "1px solid #ccc",
+              }}
+            />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // If a comic is ready, show the comic result.
+  if (selectedOutput === "comic" && comicUrl) {
+    return (
+      <div className="mt-4">
+        <img
+          src={comicUrl}
+          alt="Generated Comic"
+          className="w-full rounded-lg shadow-sm mb-4"
+        />
+        <a href={comicUrl} download target="_blank" rel="noopener noreferrer">
+          <button className="w-full px-4 py-3 rounded-lg text-white font-medium bg-[#382D76] hover:bg-[#382D76]/90">
+            Download Comic
+          </button>
+        </a>
+      </div>
+    );
+  }
+
+  // Otherwise, show the initial UI (upload, file list, output selection, configuration)
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
       <div className="bg-white rounded-lg shadow-lg p-6">
@@ -271,7 +539,7 @@ const ResearchPage = () => {
           <p className="text-xs text-gray-500 mt-1">Supports PDF format only</p>
         </div>
 
-        {/* Upload Progress Bar & Success Message */}
+        {/* Upload Progress */}
         {uploadProgress > 0 && uploadProgress < 100 && (
           <div className="w-full bg-gray-200 rounded-full h-2 mb-4 mt-4">
             <div
@@ -343,161 +611,58 @@ const ResearchPage = () => {
           </div>
         </div>
 
-        {/* Additional Configuration Options */}
+        {/* Additional Configuration for Presentation - now with just a submit button */}
         {selectedOutput === "presentation" && (
           <div className="mt-6 p-6 bg-gray-50 rounded-lg border border-gray-200 shadow-sm">
-            <h4 className="text-xl font-bold text-[#382D76] mb-4">
-              Configure Presentation
-            </h4>
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Research Title
-              </label>
-              <input
-                type="text"
-                value={researchTitle}
-                onChange={(e) => setResearchTitle(e.target.value)}
-                placeholder="Enter Research Title"
-                className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[#382D76]"
-              />
-            </div>
-            <p className="text-sm text-gray-600 mb-4">Select a style:</p>
-            <div className="flex space-x-8">
-              <label className="flex items-center space-x-3 cursor-pointer">
-                <input
-                  type="radio"
-                  name="presentationStyle"
-                  value="professional"
-                  checked={presentationStyle === "professional"}
-                  onChange={(e) =>
-                    setPresentationStyle(
-                      e.target.value as "professional" | "fun"
-                    )
-                  }
-                  className="form-radio text-[#382D76] h-5 w-5"
-                />
-                <span className="text-gray-700">Professional</span>
-              </label>
-              <label className="flex items-center space-x-3 cursor-pointer">
-                <input
-                  type="radio"
-                  name="presentationStyle"
-                  value="fun"
-                  checked={presentationStyle === "fun"}
-                  onChange={(e) =>
-                    setPresentationStyle(
-                      e.target.value as "professional" | "fun"
-                    )
-                  }
-                  className="form-radio text-[#382D76] h-5 w-5"
-                />
-                <span className="text-gray-700">Fun</span>
-              </label>
-            </div>
-            <div className="mt-4">
-              <button
-                onClick={handleTransform}
-                disabled={processing}
-                className={`w-full px-4 py-3 rounded-lg text-white font-medium transition-colors ${
-                  processing
-                    ? "bg-gray-400 cursor-not-allowed"
-                    : "bg-[#382D76] hover:bg-[#382D76]/90"
-                }`}
-              >
-                {processing ? "Transforming..." : "Generate Presentation"}
-              </button>
-            </div>
+            <button
+              onClick={handleTransform}
+              disabled={processing}
+              className={`w-full px-4 py-3 rounded-lg text-white font-medium transition-colors ${
+                processing
+                  ? "bg-gray-400 cursor-not-allowed"
+                  : "bg-[#382D76] hover:bg-[#382D76]/90"
+              }`}
+            >
+              {processing ? "Transforming..." : "Generate Presentation"}
+            </button>
           </div>
         )}
 
+        {/* Additional Configuration for Podcast - now with just a submit button */}
         {selectedOutput === "podcast" && (
           <div className="mt-6 p-6 bg-gray-50 rounded-lg border border-gray-200 shadow-sm">
-            <h4 className="text-xl font-bold text-[#382D76] mb-4">
-              Configure Podcast
-            </h4>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div>
-                <label className="block mb-2 text-sm font-medium text-gray-700">
-                  Length
-                </label>
-                <select
-                  value={podcastLength}
-                  onChange={(e) => setPodcastLength(e.target.value)}
-                  className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[#382D76]"
-                >
-                  {lengthOptions.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block mb-2 text-sm font-medium text-gray-700">
-                  Tone
-                </label>
-                <select
-                  value={podcastTone}
-                  onChange={(e) => setPodcastTone(e.target.value)}
-                  className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[#382D76]"
-                >
-                  {toneOptions.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block mb-2 text-sm font-medium text-gray-700">
-                  Language
-                </label>
-                <select
-                  value={podcastLanguage}
-                  onChange={(e) => setPodcastLanguage(e.target.value)}
-                  className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[#382D76]"
-                >
-                  {languageOptions.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-            <div className="mt-4">
-              <button
-                onClick={handleTransform}
-                disabled={processing}
-                className={`w-full px-4 py-3 rounded-lg text-white font-medium transition-colors ${
-                  processing
-                    ? "bg-gray-400 cursor-not-allowed"
-                    : "bg-[#382D76] hover:bg-[#382D76]/90"
-                }`}
-              >
-                {processing ? "Transforming..." : "Generate Podcast"}
-              </button>
-            </div>
+            <button
+              onClick={handleTransform}
+              disabled={processing}
+              className={`w-full px-4 py-3 rounded-lg text-white font-medium transition-colors ${
+                processing
+                  ? "bg-gray-400 cursor-not-allowed"
+                  : "bg-[#382D76] hover:bg-[#382D76]/90"
+              }`}
+            >
+              {processing ? "Transforming..." : "Generate Podcast"}
+            </button>
           </div>
         )}
 
+        {/* Additional Configuration for Video */}
         {selectedOutput === "video" && (
           <div className="mt-6 p-6 bg-gray-50 rounded-lg border border-gray-200 shadow-sm">
-            
             <div className="mt-4">
               <button
                 onClick={handleTransform}
                 disabled={processing}
                 className="w-full px-4 py-3 rounded-lg text-white font-medium transition-colors bg-[#382D76] hover:bg-[#382D76]/90"
               >
-                {processing ? "Transforming..." : "Generate Video"}
+                {processing ? "Transforming... , please wait it may take 3-4 mins " : "Generate Video"}
               </button>
             </div>
           </div>
         )}
+
+        {/* Additional Configuration for Comic */}
         {selectedOutput === "comic" && (
           <div className="mt-6 p-6 bg-gray-50 rounded-lg border border-gray-200 shadow-sm">
-            
             <div className="mt-4">
               <button
                 onClick={handleTransform}
@@ -507,71 +672,6 @@ const ResearchPage = () => {
                 {processing ? "Transforming..." : "Generate Comic"}
               </button>
             </div>
-          </div>
-        )}
-
-        {/* Display results with both preview and download options */}
-        {selectedOutput === "presentation" && pptUrl && (
-          <div className="mt-4">
-            <iframe
-              src={pptUrl}
-              title="Presentation Preview"
-              className="w-full h-96 rounded-lg shadow-sm mb-4"
-            />
-            <a href={pptUrl} download target="_blank" rel="noopener noreferrer">
-              <button className="w-full px-4 py-3 rounded-lg text-white font-medium bg-[#382D76] hover:bg-[#382D76]/90">
-                Download Presentation
-              </button>
-            </a>
-          </div>
-        )}
-        {selectedOutput === "podcast" && audioUrl && (
-          <div className="mt-4">
-            <audio controls src={audioUrl} className="w-full mb-4" />
-            <a
-              href={audioUrl}
-              download
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <button className="w-full px-4 py-3 rounded-lg text-white font-medium bg-[#382D76] hover:bg-[#382D76]/90">
-                Download Podcast
-              </button>
-            </a>
-          </div>
-        )}
-        {selectedOutput === "video" && videoUrl && (
-          <div className="mt-4">
-            <video controls src={videoUrl} className="w-full mb-4" />
-            <a
-              href={videoUrl}
-              download
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <button className="w-full px-4 py-3 rounded-lg text-white font-medium bg-[#382D76] hover:bg-[#382D76]/90">
-                Download Video
-              </button>
-            </a>
-          </div>
-        )}
-        {selectedOutput === "comic" && comicUrl && (
-          <div className="mt-4">
-            <img
-              src={comicUrl}
-              alt="Generated Comic"
-              className="w-full rounded-lg shadow-sm mb-4"
-            />
-            <a
-              href={comicUrl}
-              download
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <button className="w-full px-4 py-3 rounded-lg text-white font-medium bg-[#382D76] hover:bg-[#382D76]/90">
-                Download Comic
-              </button>
-            </a>
           </div>
         )}
       </div>

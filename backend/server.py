@@ -12,6 +12,9 @@ import requests
 import os
 from dotenv import dotenv_values
 from coursegen import give_gen_courses
+from langchain_groq import ChatGroq
+from langchain_core.pydantic_v1 import BaseModel, Field
+from typing import List 
 
 config = dotenv_values(".env") 
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE" 
@@ -41,33 +44,40 @@ def db_bot(userid , query) :
     mark_down_report += f" ================ tests ================= \n" 
     mark_down_report += f" |time|title|marks|report|\n"
     for activity in student['activity']:
-        if 'activity_name' in activity and isinstance(activity['activity_name'], dict):
-            if activity['activity_name'].get('name') == 'test':
-                mark_down_report += f" | {activity.get('time_stamp', '')}"
+            if 'activity_name' in activity and isinstance(activity['activity_name'], dict):
+                if activity['activity_name'].get('name') == 'test':
+                    mark_down_report += f" | {activity.get('time_stamp', '')}"
 
-                if 'title' in activity['activity_name']:
-                    mark_down_report += f" | {activity['activity_name']['title']}"
+                    if 'title' in activity['activity_name']:
+                        mark_down_report += f" | {activity['activity_name']['title']}"
 
-                if 'result' in activity['activity_name']:
-                    mark_down_report += f" : {activity['activity_name']['result']}"
+                    if 'result' in activity['activity_name']:
+                        mark_down_report += f" : {activity['activity_name']['result']}"
 
-                if 'report' in activity['activity_name']:
-                    mark_down_report += f" => {activity['activity_name']['report']}"
+                    if 'report' in activity['activity_name']:
+                        mark_down_report += f" => {activity['activity_name']['report']}"
 
-                mark_down_report += " |\n"
+                    mark_down_report += " |\n"
 
 
 
     mark_down_report += " \n================ library ================= \n"
     for activity in student['activity']:
-        if(activity['activity_name']['name'] == 'library'):
-            mark_down_report += f" | {activity['time_stamp']}"
+            if(activity['activity_name']['name'] == 'library'):
+                mark_down_report += f"{activity['time_stamp']} \n"
 
     mark_down_report+= f" \n=============== Job Search ================= \n"
 
     for activity in student['activity']:
-        if(activity['activity_name']['name'] == 'Job Search'):
-            mark_down_report += f"{activity['time_stamp']} \n"
+            if(activity['activity_name']['name'] == 'Job Search'):
+                mark_down_report += f"{activity['time_stamp']} \n"
+
+
+    mark_down_report+= f" \n=============== Study Sessions ================= \n"
+
+    for activity in student['activity']:
+            if(activity['activity_name']['name'] == 'Study Session'):
+                mark_down_report += f"| {activity['time_stamp']} | {activity['activity_name']['topic']}  \n"
 
 
 
@@ -97,22 +107,32 @@ def db_bot(userid , query) :
 
     return res.content
 
-def register(username, email, age, gender, semester, weakness, strength, resume):
-    new_student = {
-        "name": username,
-        "email": email,
-        "age": age,
-        "gender": gender,
-        "semester": semester,
-        "strength": strength,
-        "weakness": weakness,
-        "resume": resume,
-        "activity": []
-    }
+def register(username, email, image_url):
+    # Check if a user with the given email already exists
+    existing_user = student_collection.find_one({"email": email})
     
-    response = student_collection.insert_one(new_student) 
-    
-    return response.inserted_id
+    if existing_user:
+        # Update the user's name, email, and image_url; leave 'activity' unchanged
+        student_collection.update_one(
+            {"_id": existing_user["_id"]},
+            {"$set": {"name": username, "email": email, "image_url": image_url}}
+        )
+        # Retrieve and return the updated user document
+        updated_user = student_collection.find_one({"_id": existing_user["_id"]})
+        return updated_user
+    else:
+        # Create a new user document
+        new_student = {
+            "name": username,
+            "email": email,
+            "image_url": image_url,
+            "activity": []
+        }
+        # Insert the new user document
+        inserted_id = student_collection.insert_one(new_student).inserted_id
+        # Retrieve and return the newly inserted user document
+        new_user = student_collection.find_one({"_id": inserted_id})
+        return new_user
 
 
 def login(email):
@@ -247,33 +267,25 @@ CORS(app)
 
 
 @app.route('/register', methods=['POST'])
-def register_user():
+def register_endpoint():
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Missing JSON body"}), 400
+
+    username = data.get("username")
+    email = data.get("email")
+    image_url = data.get("image_url", "")  # Default to empty string if not provided
+
+    if not username or not email:
+        return jsonify({"error": "Missing required fields: username and email"}), 400
+
     try:
-        data = request.get_json()
-        required_fields = ['username', 'email', 'age', 'gender', 'semester', 'weakness', 'strength', 'resume']
-        
-        if not all(field in data for field in required_fields):
-            return jsonify({'error': 'Missing required fields'}), 400
-        
-        username = data.get('username')
-        email = data.get('email')
-        age = data.get('age')
-        gender = data.get('gender')
-        semester = data.get('semester')
-        weakness = data.get('weakness')
-        strength = data.get('strength')
-        resume = data.get('resume')
-
-        if not isinstance(age, int) or age <= 0:
-            return jsonify({'error': 'Invalid age'}), 400
-
-        user_id = register(username, email, age, gender, semester, weakness, strength, resume)
-        
-        return jsonify({'user_id': str(user_id)}), 201
-    
+        user = register(username, email, image_url)
+        # Convert ObjectId to string for JSON serialization
+        user['_id'] = str(user['_id'])
+        return jsonify(user), 200
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
+        return jsonify({"error": str(e)}), 500
 
 
 
@@ -528,12 +540,14 @@ def generate_course():
         interest = data["interest"]
         duration = data["duration"]
         n_course = data["n_course"]
+        remarks = data["remarks"]
         
         if not isinstance(n_course, int) or n_course <= 0:
             return jsonify({"error": "n_course must be a positive integer"}), 400
         import inspect
         print(inspect.getfile(give_courses))
-        courses = give_gen_courses(department, branch, interest, n_course, duration)
+        print(remarks)
+        courses = give_gen_courses(department, branch, interest, remarks , n_course , duration  )
         
         course_collection.insert_one({
             "userid": userid,
@@ -563,6 +577,77 @@ def give_courses():
         course["_id"] = str(course["_id"])
 
     return jsonify(courses) , 200 
+
+@app.route("/update_notes", methods=["POST"])
+def update_study_material_notes():
+    data = request.json
+    courseid = data.get("courseid")
+    subcourseidx = data.get("subcourseidx")
+    topicidx = data.get("topicidx")
+    study_index = data.get("study_index")
+    notes_text = data.get("notes_text")
+
+    # Fetch the course document
+    course = course_collection.find_one({"_id": courseid})
+    user_id = course['userid']
+    if not course:
+        return jsonify({"error": "Course not found"}), 404
+
+    try:
+        # Navigate to the specific study material
+        pdf_material_len = len(course['course']['content'][subcourseidx]['timeline'][topicidx]["study_material"][0]['pdf'])
+        
+        if study_index >= pdf_material_len:
+            study_type = "video"
+            study_index = study_index - pdf_material_len
+        else:
+            study_type = "pdf"
+
+        study_material = course['course']['content'][subcourseidx]['timeline'][topicidx]["study_material"][0][study_type][study_index]
+        
+        # Update or add the 'notes' field
+        study_material['notes'] = notes_text
+
+        # Update the database with the modified study material
+        course_collection.update_one(
+            {"_id": courseid},
+            {"$set": {f"course.content.{subcourseidx}.timeline.{topicidx}.study_material.0.{study_type}.{study_index}": study_material}}
+        )
+        activity_log = {
+            "time_stamp": datetime.utcnow().isoformat(),
+            "activity_name": {"name": "Study Session" , "topic" : course['course']['content'][subcourseidx]['name']} 
+        }
+        student_collection.update_one(
+            {"_id": user_id},
+            {"$push": {"activity": activity_log}}
+        )
+
+        return jsonify({"message": "Notes updated successfully"})
+    
+    except (KeyError, IndexError) as e:
+        return jsonify({"error": "Invalid indices or structure issue", "details": str(e)}), 400
+
+#change by aagam
+@app.route('/api/groq', methods=['POST'])
+def groq_endpoint():
+    data = request.get_json()
+    prompt = data.get("prompt")
+    if not prompt:
+        return jsonify({"error": "No prompt provided"}), 400
+
+    try:
+        class Questions(BaseModel):
+            questions: List[str] = Field(description="List of all the questions") 
+
+        llm = ChatGroq(groq_api_key=config['GROQ_API_KEY_STAFF'], model_name="llama-3.3-70b-versatile")
+        structured_llm = llm.with_structured_output(Questions)
+
+        structured_output = structured_llm.invoke(prompt).dict()
+        
+        return jsonify(structured_output), 200  # Return structured output as JSON
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 if __name__ == "__main__":

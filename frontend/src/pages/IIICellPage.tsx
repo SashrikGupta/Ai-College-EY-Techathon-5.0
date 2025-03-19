@@ -1,16 +1,19 @@
-import React, { useState , useContext } from "react";
-import { Briefcase, GraduationCap, ExternalLink, Upload } from "lucide-react";
-import { CurrConfigContext } from '../context.tsx';
-
-
+import React, { useState, useContext } from "react";
+import {
+  Briefcase,
+  GraduationCap,
+  ExternalLink,
+  Upload,
+} from "lucide-react";
+import { CurrConfigContext } from "../context.tsx";
 
 const IIICellPage = () => {
   const cont = useContext(CurrConfigContext) || {};
   const [role, setRole] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
-  const [jobs, setJobs] = useState([]);
-  const [courses, setCourses] = useState([]);
+  const [jobs, setJobs] = useState<any[]>([]);
+  const [courses, setCourses] = useState<any[]>([]);
   const [suggestion, setSuggestion] = useState("");
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -19,19 +22,19 @@ const IIICellPage = () => {
     }
   };
 
+  // Fetch jobs and courses based on the entered role
   const handleSubmit = async () => {
     if (!role) {
       alert("Please enter a job role.");
       return;
     }
-
     setLoading(true);
 
     const formData = new FormData();
     formData.append(
       "data",
       JSON.stringify({
-        userid: cont?.user._id,
+        userid: cont?.user?._id,
         prompt: role,
       })
     );
@@ -44,9 +47,7 @@ const IIICellPage = () => {
         method: "POST",
         body: formData,
       });
-
       const data = await response.json();
-
       if (response.ok) {
         setJobs(data.Job_Listings || []);
         setCourses(data.Courses || []);
@@ -59,6 +60,14 @@ const IIICellPage = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Open the interview page in a new tab using query parameters
+  const openInterview = (job: any) => {
+    const url = `/interview?jobTitle=${encodeURIComponent(
+      job.Job_Title
+    )}&skills=${encodeURIComponent(job.Skills)}`;
+    window.open(url, "_blank");
   };
 
   return (
@@ -74,66 +83,65 @@ const IIICellPage = () => {
               Discover the perfect jobs and courses tailored just for you.
             </p>
           </header>
-           {
-             !jobs[0] &&  (
-                 
-          <div className="bg-white rounded-xl shadow-xl p-8">
-          <h2 className="text-2xl font-bold text-gray-800 mb-6 text-center">
-            Get Started
-          </h2>
-          <div className="max-w-xl mx-auto">
-            <label className="block text-sm font-medium text-gray-700">
-              What role are you interested in?
-            </label>
-            <input
-              type="text"
-              value={role}
-              onChange={(e) => setRole(e.target.value)}
-              className="mt-2 block w-full rounded-md border border-gray-300 px-4 py-2 shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-200"
-              placeholder="e.g., AI Engineer, Data Scientist"
-            />
-          </div>
-          {/* File Upload */}
-          <div className="mt-6 max-w-xl mx-auto">
-            <label className="block text-sm font-medium text-gray-700">
-              Upload Placement Report (optional)
-            </label>
-            <div className="mt-2 flex items-center gap-3">
-              <input
-                type="file"
-                onChange={handleFileChange}
-                className="hidden"
-                id="upload-file"
-              />
-              <label
-                htmlFor="upload-file"
-                className="cursor-pointer flex items-center rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-              >
-                <Upload className="h-5 w-5 mr-2" />
-                Choose File
-              </label>
-              {file && (
-                <span className="text-sm text-gray-500">{file.name}</span>
-              )}
+
+          {/* Initial Form */}
+          {!jobs[0] && (
+            <div className="bg-white rounded-xl shadow-xl p-6">
+              <h2 className="text-2xl font-bold text-gray-800 mb-6 text-center">
+                Get Started
+              </h2>
+              <div className="max-w-xl mx-auto">
+                <label className="block text-sm font-medium text-gray-700">
+                  What role are you interested in?
+                </label>
+                <input
+                  type="text"
+                  value={role}
+                  onChange={(e) => setRole(e.target.value)}
+                  className="mt-2 block w-full rounded-md border border-gray-300 px-4 py-2 shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-200"
+                  placeholder="e.g., AI Engineer, Data Scientist"
+                />
+              </div>
+              {/* File Upload */}
+              <div className="mt-6 max-w-xl mx-auto">
+                <label className="block text-sm font-medium text-gray-700">
+                  Upload Placement Report (optional)
+                </label>
+                <div className="mt-2 flex items-center gap-3">
+                  <input
+                    type="file"
+                    onChange={handleFileChange}
+                    className="hidden"
+                    id="upload-file"
+                  />
+                  <label
+                    htmlFor="upload-file"
+                    className="cursor-pointer flex items-center rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                  >
+                    <Upload className="h-5 w-5 mr-2" />
+                    Choose File
+                  </label>
+                  {file && (
+                    <span className="text-sm text-gray-500">{file.name}</span>
+                  )}
+                </div>
+              </div>
+              <div className="mt-8 text-center">
+                <button
+                  onClick={handleSubmit}
+                  className="inline-block bg-[#382D76] text-white px-6 py-3 rounded-md shadow-lg hover:bg-[#312465] focus:outline-none focus:ring-2 focus:ring-[#382D76] focus:ring-offset-2 transition-colors duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={loading}
+                >
+                  {loading ? "Searching..." : "Find Jobs & Courses"}
+                </button>
+              </div>
             </div>
-          </div>
-          <div className="mt-8 text-center">
-            <button
-              onClick={handleSubmit}
-              className="inline-block bg-[#382D76] text-white px-6 py-3 rounded-md shadow-lg hover:bg-[#312465] focus:outline-none focus:ring-2 focus:ring-[#382D76] focus:ring-offset-2 transition-colors duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
-              disabled={loading}
-            >
-              {loading ? "Searching..." : "Find Jobs & Courses"}
-            </button>
-            </div>
-        </div>
-             )
-           }
-   
+          )}
 
           {/* Results */}
           <div className="space-y-12">
-          {suggestion && (
+            {/* AI Suggestion */}
+            {suggestion && (
               <div className="bg-indigo-50 border-l-4 border-indigo-500 rounded-xl shadow-xl p-8">
                 <h3 className="text-2xl font-semibold text-[#382D76] mb-4">
                   AI Career Advice
@@ -141,6 +149,7 @@ const IIICellPage = () => {
                 <p className="text-gray-700 leading-relaxed">{suggestion}</p>
               </div>
             )}
+
             {/* Job Listings */}
             {jobs.length > 0 && (
               <div className="bg-white rounded-xl shadow-xl p-8">
@@ -165,15 +174,23 @@ const IIICellPage = () => {
                       <p className="text-sm text-gray-500 mt-1">
                         Skills: {job.Skills}
                       </p>
-                      <a
-                        href={job.Link}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="mt-4 inline-flex items-center text-sm text-indigo-600 hover:text-indigo-500"
-                      >
-                        Apply Now
-                        <ExternalLink className="ml-2 h-4 w-4" />
-                      </a>
+                      <div className="flex items-center gap-4 mt-4">
+                        <a
+                          href={job.Link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center text-sm text-indigo-600 hover:text-indigo-500"
+                        >
+                          Apply Now
+                          <ExternalLink className="ml-2 h-4 w-4" />
+                        </a>
+                        <button
+                          onClick={() => openInterview(job)}
+                          className="text-sm text-[#382D76] font-semibold hover:underline"
+                        >
+                          Take Interview
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -215,9 +232,6 @@ const IIICellPage = () => {
                 </div>
               </div>
             )}
-
-            {/* AI Suggestion */}
-
           </div>
         </div>
       </div>

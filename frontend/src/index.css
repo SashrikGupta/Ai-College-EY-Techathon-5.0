@@ -117,6 +117,11 @@
   );
   z-index: 20;
 }
+/* custom-calendar.css */
+.react-calendar {
+  border: none !important;
+  box-shadow: none !important;
+}
 
 .word {
   display: block;

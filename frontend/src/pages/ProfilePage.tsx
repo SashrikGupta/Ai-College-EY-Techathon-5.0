@@ -1,11 +1,12 @@
 import React, { useContext, useEffect, useState } from 'react';
 import CalendarHeatmap from 'react-calendar-heatmap';
 import { Tooltip } from 'react-tooltip';
-import { Bell, Calendar, Activity as ActivityIcon, Download, ChevronRight } from 'lucide-react';
+import { Bell, Calendar as CalendarIcon, Activity as ActivityIcon, Download, ChevronRight } from 'lucide-react';
 import type { Notification, Activity } from '../types';
 import { CurrConfigContext } from '../context.tsx';
 import NewsAPI from 'newsapi';
 import { Line } from "react-chartjs-2";
+import { useNavigate } from "react-router-dom";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -15,6 +16,8 @@ import {
   Title,
   Legend,
 } from "chart.js";
+import ReactCalendar from 'react-calendar';
+import 'react-calendar/dist/Calendar.css';
 
 // Register Chart.js components
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Legend);
@@ -57,6 +60,7 @@ interface ReportData {
 const apiKey = '9be285863c0548cc9108c65cd6fab48b';
 
 const ProfilePage = () => {
+  const navigate = useNavigate();
   const [reports, setReports] = useState<ReportData[]>([]);
   const [articles, setArticles] = useState<Article[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -100,9 +104,7 @@ const ProfilePage = () => {
 
   // Context & user state management
   const context = useContext(CurrConfigContext) as any; // adjust ContextType as needed
-  const [cont, setCont] = useState<{ user?: any }>(() => {
-    return 'user' in context ? { user: context.user } : {};
-  });
+  const [cont, setCont] = useState(useContext(CurrConfigContext));
 
   // Fetch user and test reports
   useEffect(() => {
@@ -169,14 +171,14 @@ const ProfilePage = () => {
 
   // Prepare data for the chart
   const data = {
-    labels: test_labels , 
+    labels: test_labels, 
     datasets: [
       {
         label: "Test Performance",
         data: test_values,
         borderColor: "purple",
         backgroundColor: "rgba(128, 0, 128, 0.2)",
-        tension: 0.8,
+        tension: 0.3,
         borderWidth: 2,
         pointRadius: 5,
         pointBackgroundColor: "purple",
@@ -209,7 +211,7 @@ const ProfilePage = () => {
   const user = {
     name: cont.user?.name || 'User Name',
     email: cont.user?.email || 'user@example.com',
-    avatar: 'https://avatar.iran.liara.run/public/6',
+    avatar: cont?.user?.image_url || 'https://avatar.iran.liara.run/public/6',
   };
 
   const notifications = [
@@ -228,6 +230,14 @@ const ProfilePage = () => {
       type: 'test',
       date: articles[1]?.publishedAt?.slice(0, 10),
       link: articles[1]?.url,
+    },
+    {
+      id: '3',
+      title: articles[2]?.author,
+      message: articles[2]?.content?.slice(0, 100) + "...",
+      type: 'test',
+      date: articles[2]?.publishedAt?.slice(0, 10),
+      link: articles[2]?.url,
     },
   ];
 
@@ -263,7 +273,6 @@ const ProfilePage = () => {
   });
   activityData.reverse();
 
-
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -280,8 +289,14 @@ const ProfilePage = () => {
               <p className="text-sm text-gray-500">{user.email}</p>
             </div>
           </div>
-          <button className="mt-4 w-full px-4 py-2 border border-primary-500 text-primary-500 rounded-md hover:bg-primary-50 transition-colors">
-            Update Profile
+          <button className="mt-4 w-full px-4 py-2 border border-primary-500 text-primary-500 rounded-md hover:bg-primary-50 transition-colors"
+                onClick={() => {
+                  context.setIsLoggedIn(false)
+                  navigate("/"); // Navigate to home
+                  console.log("hello")
+                }}
+          >
+            Log out 
           </button>
         </div>
 
@@ -309,8 +324,7 @@ const ProfilePage = () => {
           </div>
         </div>
 
-        {/* Notifications */}
-
+        {/* Recent Activities */}
         <div className="bg-white rounded-lg shadow p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-gray-900">Recent Activities</h3>
@@ -337,27 +351,25 @@ const ProfilePage = () => {
           </div>
         </div>
 
-        {/* Recent Activities */}
+        {/* Test Performance Chart */}
         <div className="lg:col-span-2 bg-white rounded-lg shadow p-6 h-[35vh]">
-        <Line data={data} options={options} />
+          <Line data={data} options={options} />
         </div>
 
-        {/* Quick Actions */}
+        {/* Calendar */}
         <div className="bg-white rounded-lg shadow p-6">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-900">Quick Actions</h3>
-            <Calendar className="h-5 w-5 text-gray-400" />
+            <h3 className="text-lg font-semibold text-gray-900">Calendar</h3>
+            <CalendarIcon className="h-5 w-5 text-gray-400" />
           </div>
-          <div className="space-y-4">
-            <button className="w-full px-4 py-2 bg-primary-500 text-white rounded-md hover:bg-primary-600 transition-colors">
-              Schedule Test
-            </button>
-            <button className="w-full px-4 py-2 bg-primary-500 text-white rounded-md hover:bg-primary-600 transition-colors">
-              Book AI Session
-            </button>
-          </div>
+          <ReactCalendar
+            style={{ border: 'none', boxShadow: 'none' }}
+            className="w-full"
+          />
+
         </div>
             
+        {/* Notifications */}
         <div className="lg:col-span-2 bg-white rounded-lg shadow p-6 ">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-gray-900">Notifications</h3>
@@ -373,16 +385,12 @@ const ProfilePage = () => {
                   <a className="font-medium text-gray-900" href={notification.link}>{notification.title}</a>
                   <p className="text-sm text-gray-500">{notification.message}</p>
                   <p className="text-xs text-gray-400 mt-1">{notification.date}</p>
-                  
                 </div>
                 <ChevronRight className="h-5 w-5 text-gray-400" href={notification.link} />
               </div>
             ))}
           </div>
         </div>
-
-
-
       </div>
     </div>
   );

@@ -108,7 +108,7 @@ const FacultyPage = () => {
         myHeaders.append('Content-Type', 'application/json');
 
         const payload = {
-          userid: '32c3bd85-b09f-4c0a-83bd-85b09fbc0a2b',
+          userid: cont?.user._id,
           answer_sheet: answerSheet,
         };
 

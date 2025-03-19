@@ -1,4 +1,5 @@
 import json
+import concurrent.futures
 from langchain_groq import ChatGroq
 from langchain_core.pydantic_v1 import BaseModel, Field
 from typing import List
@@ -6,11 +7,11 @@ import yt_dlp
 from exa_py import Exa
 
 # Initialize Exa with your API key
-exa = Exa(api_key="bc5a029b-9ea2-4d09-baeb-7985349c75ea")
+exa = Exa(api_key="f02bd833-dad9-4388-b090-08e23374d62b")
 
 # Initialize the LLM
 llm = ChatGroq(
-    api_key='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',
+    api_key='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',
     model="llama-3.3-70b-versatile"
 )
 
@@ -33,7 +34,7 @@ def search_on_net(topic, query):
       - YouTube tutorials
       - PDF resources via Exa search (using the exa_py package)
     """
-    yt_results = search_youtube(f"tutorials on {query}")
+    yt_results = search_youtube(f"topic: {topic} tutorials on {query}")
     
     # Perform the Exa search for PDFs
     result = exa.search(f"topic: {topic} pdfs to study: {query}", category="pdf", type="auto")
@@ -51,7 +52,7 @@ def search_on_net(topic, query):
         "pdf": pdf_material
     }
 
-def give_gen_courses(department, branch, intrest, top=3, total_time=60):
+def give_gen_courses(department, branch, intrest, remarks , top=3, total_time=60):
     class course(BaseModel):
         index: int = Field(description="The index of the course from the list")
         name: str = Field(description="The name of the course")
@@ -65,8 +66,14 @@ def give_gen_courses(department, branch, intrest, top=3, total_time=60):
         list_data += f"{i} : {name['title']}\n"
 
     answer = structured_llm.invoke(
-        f"given course infos {list_data} find top {top} courses that would be suitable for user with intrest in {intrest} note all the cours must be different also arrange them in a order for student to learn sequentially"
-    ).dict()
+        f"""
+        From 
+        {list_data}, 
+        identify the top {top} unique courses best suited for a student interested in {intrest}, c
+        onsidering the advisor's remarks: 
+        {remarks}. 
+        Structure them into a well-organized learning path, ensuring the schedule follows a logical progression .
+"""    ).dict()
 
     for ans in answer['content']:
         ans['description'] = data[department]['departments'][branch][ans['index']]['description']
@@ -167,11 +174,18 @@ def give_gen_courses(department, branch, intrest, top=3, total_time=60):
                 course_time_line.append(timeline_item)
         ans['timeline'] = course_time_line
 
-    for ans in answer['content']:
-        for timeline in ans['timeline']:
-            if timeline['activity_type'] == 1:
-                study_material = []
-                study_material.append(search_on_net(intrest, timeline['topic_name']))
-                timeline['study_material'] = study_material
+    # Use parallel processing for the study material search in Library sessions
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        future_to_timeline = {}
+        for ans in answer['content']:
+            for timeline in ans['timeline']:
+                if timeline['activity_type'] == 1:
+                    future = executor.submit(search_on_net, intrest, timeline['topic_name'])
+                    future_to_timeline[future] = timeline
+
+        for future in concurrent.futures.as_completed(future_to_timeline):
+            timeline = future_to_timeline[future]
+            # Wrap the result in a list as per the original structure
+            timeline['study_material'] = [future.result()]
 
     return answer

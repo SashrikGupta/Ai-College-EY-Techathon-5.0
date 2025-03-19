@@ -1,4 +1,4 @@
-import React from 'react';
+import React  , {useState , useContext } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Navbar from './components/layout/Navbar';
 import LandingPage from './pages/LandingPage';
@@ -14,14 +14,16 @@ import ReportsPage from './pages/reports';
 import Courses from './pages/courses'
 import CourseForm from './pages/courseform'
 import CourseList from './pages/courselist'
-
+import ChatbotPage from './pages/ChatbotPage';
+import InterviewPage from './pages/InterviewPage';
+import { CurrConfigContext } from './context';
 function App() {
   // In a real app, this would come from an auth context
-  const [isLoggedIn, setIsLoggedIn] = React.useState(true);
 
-  const handleLogin = () => {
-    setIsLoggedIn(true);
-  };
+  const cont = useContext(CurrConfigContext) ; 
+
+  const isLoggedIn = cont.isLoggedIn ; 
+
 
   return (
     <Router>
@@ -32,7 +34,9 @@ function App() {
           <Route path="/about" element={<AboutPage />} />
           <Route 
             path="/login" 
-            element={<LoginPage onLogin={handleLogin} />} 
+            element={<LoginPage onLogin={()=>{
+              cont.setIsLoggedIn(true) ;
+            }} />} 
           />
           
           {/* Protected Routes */}
@@ -43,6 +47,10 @@ function App() {
           <Route
           path="/profile"
           element={isLoggedIn ? < ProfilePage  /> : <Navigate to="/login" />}
+          />
+           <Route
+          path="/interview"
+          element={isLoggedIn ? < InterviewPage  /> : <Navigate to="/login" />}
           />
           <Route
             path="/previous-courses"
@@ -79,6 +87,10 @@ function App() {
           <Route
             path="/research"
             element={isLoggedIn ? <ResearchPage /> : <Navigate to="/login" />}
+          />
+          <Route
+            path="/chat"
+            element={isLoggedIn ? <ChatbotPage /> : <Navigate to="/login" />}
           />
         </Routes>
       </div>
